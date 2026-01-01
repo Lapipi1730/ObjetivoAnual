@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Objetivo Anual</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #0e1b16;
+      color: #00ff80;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .progress-box {
+      width: 150px;
+      height: 150px;
+      border: 2px solid #00ff80;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      position: relative;
+      overflow: hidden;
+      background-color: #06200f;
+    }
+
+    .progress-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0%;
+      background-color: #00ff80;
+      transition: height 0.4s;
+    }
+
+    #total {
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
+    input {
+      width: 120px;
+      padding: 8px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      text-align: right;
+      margin-bottom: 10px;
+      background-color: #06200f;
+      color: #00ff80;
+    }
+
+    input::placeholder {
+      color: #004d33;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      background-color: #00ff80;
+      color: #0e1b16;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #00cc66;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="progress-box">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div id="total">$0 / $3000</div>
+    <input type="number" id="amount" placeholder="Sumar dinero...">
+    <button id="sumarBtn">Sumar</button>
+  </div>
+
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    // --------------------------
+    // CONFIGURACIÓN DE SUPABASE
+    // --------------------------
+    const SUPABASE_URL = "https://qqovefqpmtgxvnkbjqgs.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxb3ZlZnFwbXRneHZua2JqcWdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyMDY4NzYsImV4cCI6MjA4Mjc4Mjg3Nn0.4ZYu54sYmSVYRx3X4GYD2yO6uuqb_Wb509x_-rfR4Hs";
+
+    // Inicializar el cliente usando el objeto global "supabase" de la CDN
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let objetivo = 3000;
+    let total = 0;
+    const usuario = "user1";
+
+    // --------------------------
+    // CARGAR PROGRESO INICIAL
+    // --------------------------
+    async function cargarProgreso() {
+      try {
+        const { data, error } = await supabaseClient
+          .from('progreso')
+          .select('*')
+          .eq('usuario', usuario)
+          .single();
+
+        if (error && error.code !== 'PGRST116') { // Ignorar error "no rows"
+          console.error("Error cargando progreso:", error);
+          return;
+        }
+
+        if (data) {
+          total = parseFloat(data.total) || 0;
+          objetivo = parseFloat(data.objetivo) || 3000;
+          console.log("Total is: ", total);
+        } else {
+          await supabaseClient.from('progreso').insert([{ usuario, total, objetivo }]);
+        }
+
+        updateDisplay();
+      } catch (err) {
+        console.error("Error cargando progreso:", err);
+      }
+    }
+
+    // --------------------------
+    // FUNCION SUMAR DINERO
+    // --------------------------
+    async function addAmount() {
+      const amount = parseFloat(document.getElementById('amount').value) || 0;
+      if (amount <= 0) return;
+
+      total += amount;
+
+      if (total > objetivo) {
+        objetivo = Math.ceil(total / 1000) * 1000;
+      }
+
+      try {
+        await supabaseClient
+          .from('progreso')
+          .upsert([{ usuario, total, objetivo }], { onConflict: ['usuario'] });
+      } catch (err) {
+        console.error("Error guardando progreso:", err);
+      }
+
+      updateDisplay();
+      document.getElementById('amount').value = '';
+    }
+
+    // --------------------------
+    // ACTUALIZAR INTERFAZ
+    // --------------------------
+    function updateDisplay() {
+      document.getElementById('total').textContent = `$${total} / $${objetivo}`;
+      const percentage = Math.min((total / objetivo) * 100, 100);
+      document.getElementById('progress-fill').style.height = percentage + '%';
+    }
+
+    document.getElementById('sumarBtn').addEventListener('click', addAmount);
+
+    cargarProgreso();
+  </script>
+</body>
+</html>
